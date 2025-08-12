@@ -17,8 +17,6 @@ jobs:
         include:
           - os: macos-latest
             arch: arm64
-          - os: windows-latest
-            arch: x86
 
     steps:
       - name: Checkout code
