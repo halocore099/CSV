@@ -53,8 +53,8 @@ def run_merge():
 # --- Main Window ---
 root = tk.Tk()
 root.title("CSV Merger")
-root.geometry("450x250")
-root.resizable(False, False)
+root.geometry("600x250")
+root.resizable(True, True)
 
 # Center the window
 root.eval('tk::PlaceWindow . center')
