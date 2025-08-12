@@ -1,10 +1,10 @@
-name: Build and Release CSV Merger
+name: Build CSV Merger
 
 on:
   push:
-      branches:
-        - main
-  workflow_dispatch:    # Also allow manual triggers
+    branches:
+      - main
+  workflow_dispatch:  # manual trigger allowed
 
 jobs:
   build:
@@ -14,7 +14,6 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
         arch: [x64]
-
         include:
           - os: macos-latest
             arch: arm64
@@ -45,30 +44,3 @@ jobs:
         with:
           name: csv-merger-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        with:
-          files: release-assets/dist/*
