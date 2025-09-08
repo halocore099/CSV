@@ -2,22 +2,43 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 
+# --- Encoding detection ---
+def detect_encoding(file_path):
+    encodings_to_try = ['utf-8', 'latin-1', 'windows-1252', 'cp1252', 'iso-8859-1']
+
+    for encoding in encodings_to_try:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                f.read(1024)  # Read first 1KB to test encoding
+            return encoding
+        except UnicodeDecodeError:
+            continue
+
+    raise ValueError(f"Could not decode file {file_path} with any of the attempted encodings: {encodings_to_try}")
+
 # --- Delimiter detection ---
 def detect_delimiter(file_path, default=','):
     possible_delimiters = [',', ';', '|', '\t']
-    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+    encoding = detect_encoding(file_path)
+
+    with open(file_path, 'r', encoding=encoding) as f:
         first_line = f.readline()
+
     counts = {d: first_line.count(d) for d in possible_delimiters}
     detected = max(counts, key=counts.get)
     return detected if counts[detected] > 0 else default
 
 # --- CSV Merge Function ---
 def merge_csvs(total_path, apple_path, manual_delimiter=None):
+    # Detect encodings for both files
+    encoding_total = detect_encoding(total_path)
+    encoding_apple = detect_encoding(apple_path)
+
     delim_total = manual_delimiter if manual_delimiter else detect_delimiter(total_path)
     delim_apple = manual_delimiter if manual_delimiter else detect_delimiter(apple_path)
 
-    total_df = pd.read_csv(total_path, delimiter=delim_total)
-    apple_df = pd.read_csv(apple_path, delimiter=delim_apple)
+    total_df = pd.read_csv(total_path, delimiter=delim_total, encoding=encoding_total)
+    apple_df = pd.read_csv(apple_path, delimiter=delim_apple, encoding=encoding_apple)
 
     total_df['Brand Type'] = "Non-Apple"
     apple_df['Brand Type'] = "Apple"
