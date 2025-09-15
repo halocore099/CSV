@@ -1,5 +1,8 @@
 # CSV Merger
 
+# Anleitung finden sie hier:
+[Anleitung](/USAGE.md)
+
 ## Download Instructions
 
 1. Download the latest executable release for your platform from the Releases section on GitHub.
