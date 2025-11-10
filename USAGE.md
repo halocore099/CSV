@@ -45,6 +45,7 @@ Anschließend wiederholen wir den gleichen Vorgang, jedoch nur für **Apple-Prod
 3. Führen Sie die ausführbare Datei aus:  
    - **Windows:** `CSV Merger.exe`  
    - **macOS/Linux:** `CSV Merger`  
+   
 
 ---
 

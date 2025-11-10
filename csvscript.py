@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 import io
+import os
+from pathlib import Path
 
 # --- Encoding detection ---
 def detect_encoding(file_path):
@@ -77,6 +79,53 @@ def read_csv_with_encoding_fallback(file_path, delimiter, encoding):
                     content = f.read()
                 return pd.read_csv(io.StringIO(content), sep=delimiter, engine='python', on_bad_lines='skip')
 
+def get_writable_output_path(input_file_path):
+    """Get a writable path for the output file."""
+    # Try to save in the same directory as the input file
+    input_dir = os.path.dirname(os.path.abspath(input_file_path))
+    output_path = os.path.join(input_dir, "merged_output.csv")
+    
+    # Check if we can write to that directory
+    try:
+        # Test write access
+        test_file = os.path.join(input_dir, ".write_test")
+        try:
+            with open(test_file, 'w') as f:
+                f.write("test")
+            os.remove(test_file)
+            return output_path
+        except (OSError, PermissionError):
+            pass
+    except Exception:
+        pass
+    
+    # Fallback: try user's home directory
+    home_dir = Path.home()
+    fallback_paths = [
+        home_dir / "Documents" / "merged_output.csv",
+        home_dir / "Desktop" / "merged_output.csv",
+        home_dir / "merged_output.csv"
+    ]
+    
+    for path in fallback_paths:
+        try:
+            # Try to create the directory if it doesn't exist
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # Test write access
+            test_file = path.parent / ".write_test"
+            try:
+                with open(test_file, 'w') as f:
+                    f.write("test")
+                os.remove(test_file)
+                return str(path)
+            except (OSError, PermissionError):
+                continue
+        except Exception:
+            continue
+    
+    # Last resort: use current directory (might fail, but we'll try)
+    return os.path.abspath("merged_output.csv")
+
 def merge_csvs(total_path, apple_path, manual_delimiter=None):
     # Detect encodings for both files
     encoding_total = detect_encoding(total_path)
@@ -94,10 +143,13 @@ def merge_csvs(total_path, apple_path, manual_delimiter=None):
 
     merged = pd.concat([total_df, apple_df], ignore_index=True)
     
+    # Get a writable output path
+    output_path = get_writable_output_path(total_path)
+    
     # Standardize output delimiter (convert pipe, semicolon, tab, etc. to comma)
     output_delimiter = standardize_delimiter(delim_total)
-    merged.to_csv("merged_output.csv", sep=output_delimiter, index=False, encoding='utf-8')
-    return "merged_output.csv"
+    merged.to_csv(output_path, sep=output_delimiter, index=False, encoding='utf-8')
+    return output_path
 
 # --- GUI ---
 def browse_file(entry):
@@ -119,14 +171,17 @@ def run_merge():
         status_label.config(text="Merging CSVs...", foreground="blue")
         root.update_idletasks()
         output_file = merge_csvs(total_path, apple_path, manual_delimiter)
-        status_label.config(text=f"Merge complete! Saved to: {output_file}", foreground="green")
+        # Show just the filename and directory for cleaner display
+        output_dir = os.path.dirname(output_file)
+        output_name = os.path.basename(output_file)
+        status_label.config(text=f"Merge complete! Saved to: {output_dir}\nFile: {output_name}", foreground="green")
     except Exception as e:
         messagebox.showerror("Error", str(e))
 
 # --- Main Window ---
 root = tk.Tk()
 root.title("CSV Merger")
-root.geometry("600x250")
+root.geometry("600x280")
 root.resizable(True, True)
 
 # Center the window
@@ -159,7 +214,7 @@ ttk.Entry(frame, textvariable=delimiter_var, width=10).grid(row=3, column=0, sti
 ttk.Button(frame, text="Merge CSVs", command=run_merge).grid(row=4, column=0, columnspan=3, pady=20)
 
 # Status label
-status_label = ttk.Label(frame, text="", foreground="blue")
+status_label = ttk.Label(frame, text="", foreground="blue", wraplength=550)
 status_label.grid(row=5, column=0, columnspan=3)
 
 root.mainloop()
