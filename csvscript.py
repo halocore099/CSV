@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
+import io
 
 # --- Encoding detection ---
 def detect_encoding(file_path):
@@ -28,7 +29,54 @@ def detect_delimiter(file_path, default=','):
     detected = max(counts, key=counts.get)
     return detected if counts[detected] > 0 else default
 
+# --- Delimiter standardization ---
+def standardize_delimiter(delimiter, standard=','):
+    """
+    Convert any delimiter to a standardized one (default: comma).
+    This ensures consistent output format regardless of input delimiter.
+    
+    Args:
+        delimiter: The input delimiter (e.g., '|', ';', '\t')
+        standard: The standardized delimiter to use (default: ',')
+    
+    Returns:
+        The standardized delimiter
+    """
+    # Map common delimiters to standard
+    delimiter_map = {
+        '|': standard,
+        ';': standard,
+        '\t': standard,
+        ',': standard,
+        ':': standard,
+        ' ': standard  # space delimiter
+    }
+    
+    # Return standardized delimiter, or the standard if not in map
+    return delimiter_map.get(delimiter, standard)
+
 # --- CSV Merge Function ---
+def read_csv_with_encoding_fallback(file_path, delimiter, encoding):
+    """Read CSV file with multiple encoding fallback strategies."""
+    # First try: use detected encoding directly
+    try:
+        return pd.read_csv(file_path, sep=delimiter, encoding=encoding, engine='python', on_bad_lines='skip')
+    except (UnicodeDecodeError, UnicodeError) as e:
+        # Second try: open file with error handling and read into StringIO
+        try:
+            with open(file_path, 'r', encoding=encoding, errors='replace') as f:
+                content = f.read()
+            return pd.read_csv(io.StringIO(content), sep=delimiter, engine='python', on_bad_lines='skip')
+        except (UnicodeDecodeError, UnicodeError):
+            # Third try: use latin-1 which can read any byte sequence
+            try:
+                return pd.read_csv(file_path, sep=delimiter, encoding='latin-1', engine='python', on_bad_lines='skip')
+            except Exception:
+                # Final fallback: use errors='ignore' when opening file
+                with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
+                    content = f.read()
+                return pd.read_csv(io.StringIO(content), sep=delimiter, engine='python', on_bad_lines='skip')
+
 def merge_csvs(total_path, apple_path, manual_delimiter=None):
     # Detect encodings for both files
     encoding_total = detect_encoding(total_path)
@@ -37,14 +85,18 @@ def merge_csvs(total_path, apple_path, manual_delimiter=None):
     delim_total = manual_delimiter if manual_delimiter else detect_delimiter(total_path)
     delim_apple = manual_delimiter if manual_delimiter else detect_delimiter(apple_path)
 
-    total_df = pd.read_csv(total_path, delimiter=delim_total, encoding=encoding_total)
-    apple_df = pd.read_csv(apple_path, delimiter=delim_apple, encoding=encoding_apple)
+    # Read CSV files with robust encoding error handling
+    total_df = read_csv_with_encoding_fallback(total_path, delim_total, encoding_total)
+    apple_df = read_csv_with_encoding_fallback(apple_path, delim_apple, encoding_apple)
 
     total_df['Brand Type'] = "Non-Apple"
     apple_df['Brand Type'] = "Apple"
 
     merged = pd.concat([total_df, apple_df], ignore_index=True)
-    merged.to_csv("merged_output.csv", sep=delim_total, index=False)
+    
+    # Standardize output delimiter (convert pipe, semicolon, tab, etc. to comma)
+    output_delimiter = standardize_delimiter(delim_total)
+    merged.to_csv("merged_output.csv", sep=output_delimiter, index=False, encoding='utf-8')
     return "merged_output.csv"
 
 # --- GUI ---
