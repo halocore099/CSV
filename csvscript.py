@@ -3,16 +3,20 @@ from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 import io
 import os
+import re
 from pathlib import Path
 
 # --- Encoding detection ---
 def detect_encoding(file_path):
-    encodings_to_try = ['utf-8', 'latin-1', 'windows-1252', 'cp1252', 'iso-8859-1']
+    # windows-1252 before latin-1: both accept any byte, but windows-1252 is the
+    # correct encoding for files from German Windows software (like Tricoma).
+    # utf-8 is tried first but only passes if the ENTIRE file is valid utf-8.
+    encodings_to_try = ['utf-8', 'windows-1252', 'cp1252', 'latin-1', 'iso-8859-1']
 
     for encoding in encodings_to_try:
         try:
             with open(file_path, 'r', encoding=encoding) as f:
-                f.read(1024)  # Read first 1KB to test encoding
+                f.read()  # Read entire file to catch encoding errors anywhere
             return encoding
         except UnicodeDecodeError:
             continue
@@ -56,6 +60,25 @@ def standardize_delimiter(delimiter, standard=','):
     
     # Return standardized delimiter, or the standard if not in map
     return delimiter_map.get(delimiter, standard)
+
+# --- Post-read cleanup ---
+def drop_trailing_empty_column(df):
+    """Remove the phantom column created by a trailing delimiter at end of each line."""
+    last_col = df.columns[-1]
+    if (last_col == '' or str(last_col).startswith('Unnamed')) and df.iloc[:, -1].isna().all():
+        df = df.iloc[:, :-1]
+    return df
+
+def fix_german_decimals(df):
+    """Convert German decimal format (e.g. '100,21') to standard float (100.21)."""
+    german_decimal = re.compile(r'^\d+,\d+$')
+    for col in df.columns:
+        if df[col].dtype == object:
+            non_null = df[col].dropna()
+            if len(non_null) > 0 and non_null.str.match(german_decimal).all():
+                df[col] = df[col].str.replace(',', '.', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+    return df
 
 # --- CSV Merge Function ---
 def read_csv_with_encoding_fallback(file_path, delimiter, encoding):
@@ -137,6 +160,12 @@ def merge_csvs(total_path, apple_path, manual_delimiter=None):
     # Read CSV files with robust encoding error handling
     total_df = read_csv_with_encoding_fallback(total_path, delim_total, encoding_total)
     apple_df = read_csv_with_encoding_fallback(apple_path, delim_apple, encoding_apple)
+
+    # Normalise format: drop phantom trailing column, convert German decimals
+    total_df = drop_trailing_empty_column(total_df)
+    apple_df = drop_trailing_empty_column(apple_df)
+    total_df = fix_german_decimals(total_df)
+    apple_df = fix_german_decimals(apple_df)
 
     total_df['Brand Type'] = "Non-Apple"
     apple_df['Brand Type'] = "Apple"
